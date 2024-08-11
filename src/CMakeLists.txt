@@ -106,8 +106,8 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   addresstype.cpp
   base58.cpp
   bech32.cpp
-  chainparamsbase.cpp
   chainparams.cpp
+  chainparamsbase.cpp
   coins.cpp
   common/args.cpp
   common/bloom.cpp
@@ -130,18 +130,18 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   key.cpp
   key_io.cpp
   merkleblock.cpp
+  net_permissions.cpp
   net_types.cpp
   netaddress.cpp
   netbase.cpp
-  net_permissions.cpp
   outputtype.cpp
   policy/feerate.cpp
   policy/policy.cpp
   protocol.cpp
   psbt.cpp
+  rpc/external_signer.cpp
   rpc/rawtransaction_util.cpp
   rpc/request.cpp
-  rpc/external_signer.cpp
   rpc/util.cpp
   scheduler.cpp
   script/descriptor.cpp
