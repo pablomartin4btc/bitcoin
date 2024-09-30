@@ -36,8 +36,8 @@ WALLET_NOT_SPECIFIED = (
     "Multiple wallets are loaded. Please select which wallet to use by requesting the RPC "
     "through the /wallet/<walletname> URI path. Or for the CLI, specify the \"-rpcwallet=<walletname>\" "
     "option before the command (run \"bitcoin-cli -h\" for help or \"bitcoin-cli listwallets\" to see "
-    "which wallets are currently loaded)."
-)
+    "which wallets are currently loaded).")
+INVALID_COMMAND_ARG = 'error: no option starting with \"-\" should be specified after a command (in this case \"%s\" was passed to \"%s\" command).'
 
 
 def cli_get_info_string_to_dict(cli_get_info_string):
@@ -414,6 +414,11 @@ class TestBitcoinCli(BitcoinTestFramework):
         else:
             self.log.info("*** Wallet not compiled; cli getwalletinfo and -getinfo wallet tests skipped")
             self.generate(self.nodes[0], 25)  # maintain block parity with the wallet_compiled conditional branch
+
+        self.log.info('Test a command with any argument starting with \"-\" raises a process error')
+        assert_raises_process_error(1, INVALID_COMMAND_ARG % (rpcwallet2, '-generate'), self.nodes[0].cli(rpcwallet2, '-generate', 1, rpcwallet2).send_cli)
+        assert_raises_process_error(1, INVALID_COMMAND_ARG % ('-anything', 'listtransactions'), self.nodes[0].cli(rpcwallet2, 'listtransactions', 1, '-anything').send_cli)
+        assert_raises_process_error(1, INVALID_COMMAND_ARG % ('-anything', 'getaddressinfo'), self.nodes[0].cli(rpcwallet2, 'getaddressinfo', w2.getnewaddress(), '-anything').send_cli)
 
         self.log.info("Test -version with node stopped")
         self.stop_node(0)

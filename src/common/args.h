@@ -366,11 +366,11 @@ protected:
     }
 
     /**
-     * Check CLI command args
+     * Return a CLI command if any or an empty string if none
      *
      * @throws std::runtime_error when multiple CLI_COMMAND arguments are specified
      */
-    void CheckMultipleCLIArgs() const;
+    std::string GetCLICommand() const;
 
     /**
      * Get the help string

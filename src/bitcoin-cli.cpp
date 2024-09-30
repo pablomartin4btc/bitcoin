@@ -1159,6 +1159,34 @@ static void SetGenerateToAddressArgs(const std::string& address, std::vector<std
     args.emplace(args.begin() + 1, address);
 }
 
+/**
+ * Check if a given argument to a command starts with a dash ('-').
+ * @param[in] arg  String view representing the argument to check.
+ * @return         True if the argument starts with '-', false otherwise.
+ */
+static bool StartsWithDash(std::string_view arg) {
+    return arg.rfind("-", 0) == 0;
+}
+
+/**
+ * Check if any argument starts with a dash ('-') and throw an error if found.
+ * This function ensures that no option-style argument is provided after a command.
+ * @param[in] args  Reference to vector of string views representing the command-line arguments.
+ * @throws          std::runtime_error if any argument starts with '-'.
+ */
+static void CheckCommandArguments(const std::vector<std::string>& args) {
+
+    auto it = std::find_if(args.begin() + 1, args.end(), StartsWithDash);
+    const std::string& cliCommand{gArgs.GetCLICommand()};
+    // If cliCommand is not empty, use it; otherwise, use the first argument in args which would be an rpc command
+    std::string commandUsed = cliCommand.empty() ? args.front() : cliCommand;
+
+    if (it != args.end()) {
+        throw std::runtime_error(strprintf("no option starting with \"-\" should be specified after a command "
+                                 "(in this case \"%s\" was passed to \"%s\" command).", args.back(), commandUsed));
+    }
+}
+
 static int CommandLineRPC(int argc, char *argv[])
 {
     std::string strPrint;
@@ -1185,6 +1213,7 @@ static int CommandLineRPC(int argc, char *argv[])
             gArgs.ForceSetArg("-rpcpassword", rpcPass);
         }
         std::vector<std::string> args = std::vector<std::string>(&argv[1], &argv[argc]);
+        CheckCommandArguments(args);
         if (gArgs.GetBoolArg("-stdinwalletpassphrase", false)) {
             NO_STDIN_ECHO();
             std::string walletPass;
@@ -1213,7 +1242,6 @@ static int CommandLineRPC(int argc, char *argv[])
                 fputc('\n', stdout);
             }
         }
-        gArgs.CheckMultipleCLIArgs();
         std::unique_ptr<BaseRequestHandler> rh;
         std::string method;
         if (gArgs.IsArgSet("-getinfo")) {

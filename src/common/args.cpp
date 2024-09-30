@@ -589,7 +589,7 @@ void ArgsManager::AddHiddenArgs(const std::vector<std::string>& names)
     }
 }
 
-void ArgsManager::CheckMultipleCLIArgs() const
+std::string ArgsManager::GetCLICommand() const
 {
     LOCK(cs_args);
     std::vector<std::string> found{};
@@ -604,6 +604,7 @@ void ArgsManager::CheckMultipleCLIArgs() const
             throw std::runtime_error(strprintf("Only one of %s may be specified.", util::Join(found, ", ")));
         }
     }
+    return !found.empty() ? found.back() : "";
 }
 
 std::string ArgsManager::GetHelpMessage() const
