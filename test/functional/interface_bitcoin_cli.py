@@ -5,7 +5,9 @@
 """Test bitcoin-cli"""
 
 from decimal import Decimal
+import os
 import re
+import shutil
 
 from test_framework.blocktools import COINBASE_MATURITY
 from test_framework.netutil import test_ipv6_local
@@ -336,15 +338,56 @@ class TestBitcoinCli(BitcoinTestFramework):
             n4 = 10
             blocks = self.nodes[0].getblockcount()
 
-            self.log.info('Test -generate -rpcwallet=<filename> raise RPC error')
+            # Test bitcoin-cli -generate with -rpcwallet using filename instead a wallet name
+            self.log.info('Test -generate -rpcwallet=<walletname> ("wallet.dat" filename with path instead of "walletname") raises RPC error')
             wallet2_path = f'-rpcwallet={self.nodes[0].wallets_path / wallets[2] / self.wallet_data_filename}'
-            assert_raises_rpc_error(-18, WALLET_NOT_LOADED, self.nodes[0].cli(wallet2_path, '-generate').echo)
+            # a path included in the filename will always fail as the wallet is not knwon by that name
+            assert_raises_rpc_error(-18, WALLET_NOT_LOADED, self.nodes[0].cli(wallet2_path, '-generate').echo)            
+            
+            self.log.info('Test -generate -rpcwallet=<walletname> ("wallet.dat" filename without path instead of "walletname") raises RPC error')
+            wallet2_name = f'-rpcwallet={self.wallet_data_filename}'
+            # using listwallets will show the wallets loaded by their .dat filename (only legacy) and the filename will be used as the wallet name
+            assert_raises_rpc_error(-18, WALLET_NOT_LOADED, self.nodes[0].cli(wallet2_name, '-generate').echo)
+
+            self.log.info('Test loading a descriptor wallet first in order to use later -generate -rpcwallet=<walletname> with descriptor wallet filename raises RPC error')
+            wallets_dir = self.nodes[0].wallets_path
+            wallet_path = wallets_dir / wallets[2]
+            wallet_dat_path = wallet_path / self.wallet_data_filename
+            wallet_copy_dat_name = "wallet-copy.dat"
+            wallet_copy_dat = wallets_dir / wallet_copy_dat_name
+            shutil.copyfile(wallet_dat_path, wallet_copy_dat)
+            # descriptor wallets will fail to load with their .dat file
+            assert_raises_rpc_error(-18, 'Wallet file verification failed.', self.nodes[0].loadwallet, wallet_copy_dat_name)
+            os.remove(wallet_copy_dat)
+
+            self.log.info('Test -generate -rpcwallet=<walletname> ("wallet.dat" legacy wallet filename located in walletdir instead of "walletname")')
+            if self.is_bdb_compiled():
+                # only legacy wallets can be loaded by the filename and no path can be used, the wallet .dat file has to be located in the
+                # default wallets dir (or in the location set by -walletdir)
+                self.nodes[0].createwallet(wallet_name="legacy_wallet", descriptors=False, passphrase=None)
+                wallet_path = wallets_dir / "legacy_wallet"
+                wallet_dat_path = wallet_path / self.wallet_data_filename
+                wallet_copy_dat_name = "legacy_wallet.dat"
+                wallet_copy_dat = wallets_dir / wallet_copy_dat_name
+                shutil.copyfile(wallet_dat_path, wallet_copy_dat)
+                shutil.copytree(wallet_path / "database", wallets_dir / "database")
+                self.nodes[0].loadwallet(wallet_copy_dat_name)
+                rpcwallet_legacy = f'-rpcwallet={wallet_copy_dat_name}'
+                generate = self.nodes[0].cli(rpcwallet_legacy, '-generate').send_cli()
+                assert_equal(set(generate.keys()), {'address', 'blocks'})
+                assert_equal(len(generate["blocks"]), 1)
+                assert_equal(self.nodes[0].getblockcount(), blocks + 1)
+                self.nodes[0].unloadwallet(wallet_copy_dat_name)
+                os.remove(wallet_copy_dat)
+                shutil.rmtree(wallets_dir / "database")
+            else:
+                self.log.warning("Skipping BDB test")
 
             self.log.info('Test -generate -rpcwallet with no args')
             generate = self.nodes[0].cli(rpcwallet2, '-generate').send_cli()
             assert_equal(set(generate.keys()), {'address', 'blocks'})
             assert_equal(len(generate["blocks"]), 1)
-            assert_equal(self.nodes[0].getblockcount(), blocks + 1)
+            assert_equal(self.nodes[0].getblockcount(), blocks + 2)
 
             self.log.info('Test -generate -rpcwallet with bad args')
             assert_raises_process_error(1, JSON_PARSING_ERROR, self.nodes[0].cli(rpcwallet2, '-generate', 'foo').echo)
@@ -355,13 +398,13 @@ class TestBitcoinCli(BitcoinTestFramework):
             generate = self.nodes[0].cli(rpcwallet2, '-generate', n3).send_cli()
             assert_equal(set(generate.keys()), {'address', 'blocks'})
             assert_equal(len(generate["blocks"]), n3)
-            assert_equal(self.nodes[0].getblockcount(), blocks + 1 + n3)
+            assert_equal(self.nodes[0].getblockcount(), blocks + 2 + n3)
 
             self.log.info('Test -generate -rpcwallet with nblocks and maxtries')
             generate = self.nodes[0].cli(rpcwallet2, '-generate', n4, 1000000).send_cli()
             assert_equal(set(generate.keys()), {'address', 'blocks'})
             assert_equal(len(generate["blocks"]), n4)
-            assert_equal(self.nodes[0].getblockcount(), blocks + 1 + n3 + n4)
+            assert_equal(self.nodes[0].getblockcount(), blocks + 2 + n3 + n4)
 
             self.log.info('Test -generate without -rpcwallet in multiwallet mode raises RPC error')
             assert_raises_rpc_error(-19, WALLET_NOT_SPECIFIED, self.nodes[0].cli('-generate').echo)
@@ -382,7 +425,7 @@ class TestBitcoinCli(BitcoinTestFramework):
         self.nodes[0].wait_for_cookie_credentials()  # ensure cookie file is available to avoid race condition
         blocks = self.nodes[0].cli('-rpcwait').send_cli('getblockcount')
         self.nodes[0].wait_for_rpc_connection()
-        assert_equal(blocks, BLOCKS + 25)
+        assert_equal(blocks, BLOCKS + 26)
 
         self.log.info("Test -rpcwait option waits at most -rpcwaittimeout seconds for startup")
         self.stop_node(0)  # stop the node so we time out
