@@ -1191,16 +1191,21 @@ static void SetGenerateToAddressArgs(const std::string& address, std::vector<std
     args.emplace(args.begin() + 1, address);
 }
 
+std::vector<std::string> GetCommandArgs() {
+    std::optional<const ArgsManager::Command> command = gArgs.GetCommand();
+    
+    // Return command args if command is present, otherwise return an empty vector
+    if (command.has_value()) {
+        return command->args;
+    }
+    return {};  // Return an empty vector
+}
+
 static int CommandLineRPC(int argc, char *argv[])
 {
     std::string strPrint;
     int nRet = 0;
     try {
-        // Skip switches
-        while (argc > 1 && IsSwitchChar(argv[1][0])) {
-            argc--;
-            argv++;
-        }
         std::string rpcPass;
         if (gArgs.GetBoolArg("-stdinrpcpass", false)) {
             NO_STDIN_ECHO();
@@ -1216,7 +1221,7 @@ static int CommandLineRPC(int argc, char *argv[])
             }
             gArgs.ForceSetArg("-rpcpassword", rpcPass);
         }
-        std::vector<std::string> args = std::vector<std::string>(&argv[1], &argv[argc]);
+        std::vector<std::string> args = GetCommandArgs();
         if (gArgs.GetBoolArg("-stdinwalletpassphrase", false)) {
             NO_STDIN_ECHO();
             std::string walletPass;
