@@ -98,19 +98,23 @@ class WalletMigrationTest(BitcoinTestFramework):
         else:
             assert_equal(addr_info['labels'], []),
 
-    def migrate_and_get_rpc(self, wallet_name, **kwargs):
+    def migrate_and_get_rpc(self, wallet_name_or_path, **kwargs):
         # Since we may rescan on loading of a wallet, make sure that the best block
         # is written before beginning migration
         # Reload to force write that record
-        self.old_node.unloadwallet(wallet_name)
-        self.old_node.loadwallet(wallet_name)
-        assert_equal(self.old_node.get_wallet_rpc(wallet_name).getwalletinfo()["descriptors"], False)
+        wallet_name = wallet_name_or_path
+        wallet_path = kwargs.pop('wallet_path', None)
+        if (wallet_path is not None):
+            wallet_name_or_path = wallet_path
+        self.old_node.unloadwallet(wallet_name_or_path)
+        self.old_node.loadwallet(wallet_name_or_path)
+        assert_equal(self.old_node.get_wallet_rpc(wallet_name_or_path).getwalletinfo()["descriptors"], False)
         # Now unload so we can copy it to the master node for the migration test
-        self.old_node.unloadwallet(wallet_name)
-        if wallet_name == "":
+        self.old_node.unloadwallet(wallet_name_or_path)
+        if wallet_name_or_path == "":
             shutil.copyfile(self.old_node.wallets_path / "wallet.dat", self.master_node.wallets_path / "wallet.dat")
         else:
-            shutil.copytree(self.old_node.wallets_path / wallet_name, self.master_node.wallets_path / wallet_name)
+            shutil.copytree(self.old_node.wallets_path / wallet_name, self.master_node.wallets_path / wallet_name, dirs_exist_ok=True)
         # Migrate, checking that rescan does not occur
         with self.master_node.assert_debug_log(expected_msgs=[], unexpected_msgs=["Rescanning"]):
             migrate_info = self.master_node.migratewallet(wallet_name=wallet_name, **kwargs)
@@ -479,12 +483,10 @@ class WalletMigrationTest(BitcoinTestFramework):
         assert_raises_rpc_error(-4, "The passphrase contains a null character", self.master_node.migratewallet, "encrypted", "pass\0with\0null")
 
         # Verify we can properly migrate the encrypted wallet
-        self.master_node.migratewallet("encrypted", passphrase="pass")
-        wallet = self.master_node.get_wallet_rpc("encrypted")
+        self.old_node.loadwallet("encrypted")
+        _, wallet = self.migrate_and_get_rpc("encrypted", passphrase="pass")
 
         info = wallet.getwalletinfo()
-        assert_equal(info["descriptors"], True)
-        assert_equal(info["format"], "sqlite")
         assert_equal(info["unlocked_until"], 0)
         wallet.gettransaction(txid)
 
@@ -509,15 +511,10 @@ class WalletMigrationTest(BitcoinTestFramework):
 
         wallet.unloadwallet()
 
-        wallet_file_path = self.old_node.wallets_path / "notloaded2"
-        self.master_node.migratewallet(wallet_file_path)
-
         # Because we gave the name by full path, the loaded wallet's name is that path too.
-        wallet = self.master_node.get_wallet_rpc(str(wallet_file_path))
-
-        info = wallet.getwalletinfo()
-        assert_equal(info["descriptors"], True)
-        assert_equal(info["format"], "sqlite")
+        wallet_file_path = self.old_node.wallets_path / "notloaded2"
+        self.old_node.loadwallet(str(wallet_file_path))
+        _, wallet = self.migrate_and_get_rpc("notloaded2", wallet_path = str(wallet_file_path))
         wallet.gettransaction(txid)
 
         assert_equal(bals, wallet.getbalances())
