@@ -139,6 +139,10 @@ BOOST_FIXTURE_TEST_CASE(test_addnode_getaddednodeinfo_and_connection_detection, 
     }
     AddPeer(id, nodes, *peerman, *connman, ConnectionType::OUTBOUND_FULL_RELAY);
     BOOST_CHECK(!connman->AddedNodesContain(nodes.back()->addr));
+    BOOST_TEST_MESSAGE("Call AddNode() for latest added peer");
+    BOOST_CHECK(connman->AddNode({/*m_added_node=*/nodes.back()->addr.ToStringAddrPort(), /*m_use_v2transport=*/true}));
+    BOOST_TEST_MESSAGE(strprintf("peer id=%s addr=%s", nodes.back()->GetId(), nodes.back()->addr.ToStringAddrPort()));
+    BOOST_CHECK(connman->AddedNodesContain(nodes.back()->addr));
 
     BOOST_TEST_MESSAGE("\nPrint GetAddedNodeInfo contents:");
     for (const auto& info : connman->GetAddedNodeInfo(/*include_connected=*/true)) {
@@ -160,6 +164,10 @@ BOOST_FIXTURE_TEST_CASE(test_addnode_getaddednodeinfo_and_connection_detection, 
         uint16_t changed_port = node->addr.GetPort() + 1;
         CService address_with_changed_port{node->addr, changed_port};
         BOOST_CHECK(connman->AlreadyConnectedPublic(CAddress{address_with_changed_port, NODE_NONE}));
+        // Nodes already added to the ConnMan can't be added
+        BOOST_CHECK(!connman->AddNode({/*m_added_node=*/node->addr.ToStringAddrPort(), /*m_use_v2transport=*/true}));
+        // Nodes with same IP but diff port can be added
+        BOOST_CHECK(connman->AddNode({/*m_added_node=*/address_with_changed_port.ToStringAddrPort(), /*m_use_v2transport=*/true}));
     }
 
     // Clean up
