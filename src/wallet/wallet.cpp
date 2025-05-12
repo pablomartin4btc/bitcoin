@@ -4611,5 +4611,4 @@ void CWallet::DisconnectChainNotifications()
         m_chain_notifications_handler.reset();
     }
 }
-
 } // namespace wallet
