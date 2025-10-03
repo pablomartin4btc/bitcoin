@@ -55,6 +55,9 @@ FUZZ_TARGET(parse_numbers)
 
     (void)ParseMoney(random_string);
 
+    double d;
+    (void)ParseDouble(random_string, &d);
+
     (void)LocaleIndependentAtoi<int>(random_string);
 
     int64_t i64;
