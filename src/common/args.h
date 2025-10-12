@@ -441,7 +441,7 @@ private:
         const std::string& section,
         const std::map<std::string, std::vector<common::SettingsValue>>& args) const;
 
-    bool ProcessOptionKey(std::string& key, std::optional<std::string>& val, std::string& error, const bool found_after_non_option = false);
+    bool ProcessOptionKey(std::string& key, std::optional<std::string>& val, std::string& error, const bool found_after_non_option = false, const bool named_param = false);
 };
 
 extern ArgsManager gArgs;

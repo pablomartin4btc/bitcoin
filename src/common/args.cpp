@@ -176,14 +176,24 @@ void ArgsManager::SelectConfigNetwork(const std::string& network)
     m_network = network;
 }
 
-bool ArgsManager::ProcessOptionKey(std::string& key, std::optional<std::string>& val, std::string& error, const bool found_after_non_option) {
+bool ArgsManager::ProcessOptionKey(std::string& key, std::optional<std::string>& val, std::string& error, const bool found_after_non_option, const bool named_param) {
 
+    bool double_dash{false};
     std::string original_input = key; // Capture the original key
     if (val) original_input += "=" + *val; // Append =value if it exists
 
     // Transform --foo to -foo
-    if (key.length() > 1 && key[1] == '-')
+    if (key.length() > 1 && key[1] == '-') {
         key.erase(0, 1);
+        // add "-named" option if the call have a double dash param intended for RPC
+        // only if CLI/ bitcoin-cli has the -named arg set (argsman.AddArg("-named", ...)
+        std::string namedKey{"-named"};
+        std::optional<std::string> namedVal;
+        if (!ProcessOptionKey(namedKey, namedVal, error, false, true)) {
+            return false;
+        }
+        double_dash = true;
+    }
 
     // Transform -foo to foo
     key.erase(0, 1);
@@ -193,14 +203,19 @@ bool ArgsManager::ProcessOptionKey(std::string& key, std::optional<std::string>&
     // Unknown command line options and command line options with dot characters
     // (which are returned from InterpretKey with nonempty section strings)are not valid.
     if (!flags || !keyinfo.section.empty()) {
+        LOCK(cs_args);
+        // if it's a double dash --, means could be an RPC named param so remove them
+        if (double_dash) {
+            m_command.emplace_back(original_input.substr(2));
+            return true;
+        }
         if (!found_after_non_option) {
+            if (named_param) return true;
             error = strprintf("Invalid parameter %s", original_input);
         } else {
             // if the option is invalid but comes after a non-option (found_after_non_option)
             // leave it up to the command if it accepts args that begin with "-"
-            LOCK(cs_args);
             m_command.emplace_back(original_input);
-            // returns true to continue processing the args of the command
             return true;
         }
         return false;
