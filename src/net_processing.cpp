@@ -6322,6 +6322,24 @@ void PeerManagerImpl::MaybeSendGetData(CNode& node, Peer& peer, CNodeState& stat
         MakeAndPushMessage(node, NetMsgType::GETDATA, vGetData);
 }
 
+void PeerManagerImpl::MaybeSendTxMessages(CNode& node, Peer& peer, std::vector<CInv>& vInv,
+    std::chrono::microseconds current_time)
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(g_msgproc_mutex);
+
+    if (auto tx_relay = peer.GetTxRelay(); tx_relay != nullptr) {
+        LOCK(tx_relay->m_tx_inventory_mutex);
+        const bool fSendTrickle{ScheduleTxRelayTrickle(*tx_relay, node, current_time)};
+
+        // Respond to BIP35 mempool requests
+        if (fSendTrickle) MaybeSendMempoolResponse(*tx_relay, peer, node, vInv);
+
+        // Determine transactions to relay
+        if (fSendTrickle) MaybeSendTxInventory(*tx_relay, peer, node, vInv);
+    }
+}
+
 bool PeerManagerImpl::ComputeSyncBlocksAndHeaders(const CNode& node, const Peer& peer,
     const CNodeState& state)
 {
@@ -6429,16 +6447,7 @@ bool PeerManagerImpl::SendMessages(CNode& node)
         std::vector<CInv> vInv;
         MaybeSendBlockInv(node, peer, vInv);
 
-        if (auto tx_relay = peer.GetTxRelay(); tx_relay != nullptr) {
-                LOCK(tx_relay->m_tx_inventory_mutex);
-                const bool fSendTrickle{ScheduleTxRelayTrickle(*tx_relay, node, current_time)};
-
-                // Respond to BIP35 mempool requests
-                if (fSendTrickle) MaybeSendMempoolResponse(*tx_relay, peer, node, vInv);
-
-                // Determine transactions to relay
-                if (fSendTrickle) MaybeSendTxInventory(*tx_relay, peer, node, vInv);
-        }
+        MaybeSendTxMessages(node, peer, vInv, current_time);
         if (!vInv.empty())
             MakeAndPushMessage(node, NetMsgType::INV, vInv);
 
