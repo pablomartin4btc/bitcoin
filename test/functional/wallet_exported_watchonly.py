@@ -249,6 +249,24 @@ class WalletExportedWatchOnly(BitcoinTestFramework):
         offline_wallet.unloadwallet()
         online_wallet.unloadwallet()
 
+    def test_export_blank_wallet(self):
+        self.log.info("Test that exporting a blank/no-private-key wallet returns an error")
+
+        # blank=True + disable_private_keys: wallet has no descriptors at all
+        self.offline.createwallet(wallet_name="blank_no_keys", blank=True, disable_private_keys=True)
+        blank_wallet = self.offline.get_wallet_rpc("blank_no_keys")
+        assert_equal(blank_wallet.listdescriptors()["descriptors"], [])
+        export_path = os.path.join(self.export_path, "blank_export.dat")
+        assert_raises_rpc_error(-4, "Wallet has no descriptors to export", blank_wallet.exportwatchonlywallet, export_path)
+        blank_wallet.unloadwallet()
+
+        # disable_private_keys only also results in a blank wallet (no descriptors)
+        self.offline.createwallet(wallet_name="no_keys_only", disable_private_keys=True)
+        no_keys_wallet = self.offline.get_wallet_rpc("no_keys_only")
+        assert_equal(no_keys_wallet.listdescriptors()["descriptors"], [])
+        assert_raises_rpc_error(-4, "Wallet has no descriptors to export", no_keys_wallet.exportwatchonlywallet, export_path)
+        no_keys_wallet.unloadwallet()
+
     def run_test(self):
         self.online = self.nodes[0]
         self.offline = self.nodes[1]
@@ -268,6 +286,7 @@ class WalletExportedWatchOnly(BitcoinTestFramework):
         self.test_export_imported_descriptors()
         self.test_avoid_reuse()
         self.test_encrypted_wallet()
+        self.test_export_blank_wallet()
 
 if __name__ == '__main__':
     WalletExportedWatchOnly(__file__).main()
