@@ -62,6 +62,9 @@ util::Result<std::string> ExportWatchOnlyWallet(const CWallet& wallet, const fs:
     if (!exported) {
         return util::Error{Untranslated(exported.error())};
     }
+    if (exported->empty()) {
+        return util::Error{_("Error: Wallet has no descriptors to export")};
+    }
 
     // Setup DatabaseOptions to create a new sqlite database
     DatabaseOptions options;
