@@ -552,20 +552,27 @@ class HTTPBasicsTest (BitcoinTestFramework):
 
     def check_whitespace_in_headers(self):
         self.log.info("Check that requests with whitespace in headers are rejected")
-        # Extra whitespace before colon in header.
-        conn = BitcoinHTTPConnection(self.node)
         body = '{"method": "getbestblockhash"}'
-        raw = (
-            f"POST / HTTP/1.1\r\n"
-            f"Host: {conn.url.hostname}\r\n"
-            f"Authorization : Basic {str_to_b64str(conn.authpair)}\r\n"
-            f"Content-Length: {len(body)}\r\n"
-            f"\r\n"
-            f"{body}"
-        ).encode("ascii")
-        conn.send_raw(raw)
-        response = conn.recv_raw().decode()
-        assert response.startswith("HTTP/1.1 400")
+
+        def assert_rejects_bad_header(conn, header_line):
+            raw = (
+                f"POST / HTTP/1.1\r\n"
+                f"Host: {conn.url.hostname}\r\n"
+                f"{header_line}\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                f"\r\n"
+                f"{body}"
+            ).encode("ascii")
+            conn.send_raw(raw)
+            assert conn.recv_raw().decode().startswith("HTTP/1.1 400")
+
+        # Extra whitespace (space) before colon in header field-name.
+        conn = BitcoinHTTPConnection(self.node)
+        assert_rejects_bad_header(conn, f"Authorization : Basic {str_to_b64str(conn.authpair)}")
+
+        # Extra whitespace (tab) before colon in header field-name.
+        conn = BitcoinHTTPConnection(self.node)
+        assert_rejects_bad_header(conn, f"Authorization\t: Basic {str_to_b64str(conn.authpair)}")
 
         # Extra whitespace at start of new line.
         # "line folding" as defined in
@@ -573,17 +580,7 @@ class HTTPBasicsTest (BitcoinTestFramework):
         # is considered unsafe and is explicitly deprecated in
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.2.4
         conn = BitcoinHTTPConnection(self.node)
-        raw = (
-            f"POST / HTTP/1.1\r\n"
-            f"Host: {conn.url.hostname}\r\n"
-            f"Authorization: Basic \r\n {str_to_b64str(conn.authpair)}\r\n"
-            f"Content-Length: {len(body)}\r\n"
-            f"\r\n"
-            f"{body}"
-        ).encode("ascii")
-        conn.send_raw(raw)
-        response = conn.recv_raw().decode()
-        assert response.startswith("HTTP/1.1 400")
+        assert_rejects_bad_header(conn, f"Authorization: Basic \r\n {str_to_b64str(conn.authpair)}")
 
 
 if __name__ == '__main__':
