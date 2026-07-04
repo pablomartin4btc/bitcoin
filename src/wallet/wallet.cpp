@@ -3881,10 +3881,10 @@ bool CWallet::MigrateToSQLite(bilingual_str& error)
         return false;
     }
 
-    // Close this database and delete the file
-    fs::path db_path = fs::PathFromString(m_database->Filename());
+    // Close this database and delete its file(s)
+    const std::vector<fs::path> old_files = m_database->Files();
     m_database->Close();
-    fs::remove(db_path);
+    for (const fs::path& file : old_files) fs::remove(file);
 
     // Generate the path for the location of the migrated wallet
     // Wallets that are plain files rather than wallet directories will be migrated to be wallet directories.
@@ -3908,7 +3908,7 @@ bool CWallet::MigrateToSQLite(bilingual_str& error)
         if (!batch->Write(std::span{key}, std::span{value})) {
             batch->TxnAbort();
             m_database->Close();
-            fs::remove(m_database->Filename());
+            for (const fs::path& file : m_database->Files()) fs::remove(file);
             assert(false); // This is a critical error, the new db could not be written to. The original db exists as a backup, but we should not continue execution.
         }
     }
@@ -4417,7 +4417,9 @@ util::Result<MigrationResult> MigrateLegacyToDescriptor(std::shared_ptr<CWallet>
             // This applies to the watch-only and solvable wallets.
             // Wallets stored directly as files in the top-level directory
             // (e.g. default unnamed wallets) don’t have a removable parent directory.
-            wallet_empty_dirs_to_remove.insert(fs::PathFromString(wallet.GetDatabase().Filename()).parent_path());
+            if (!files.empty()) {
+                wallet_empty_dirs_to_remove.insert(files.front().parent_path());
+            }
         }
     };
 
