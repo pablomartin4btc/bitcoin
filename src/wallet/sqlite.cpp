@@ -716,6 +716,15 @@ std::unique_ptr<SQLiteDatabase> MakeSQLiteDatabase(const fs::path& path, const D
     }
 }
 
+InMemoryWalletDatabase::InMemoryWalletDatabase()
+    : SQLiteDatabase(fs::path{}, fs::path{}, DatabaseOptions(), SQLITE_OPEN_MEMORY)
+{}
+
+std::unique_ptr<WalletDatabase> MakeInMemoryWalletDatabase()
+{
+    return std::make_unique<InMemoryWalletDatabase>();
+}
+
 std::string SQLiteDatabaseVersion()
 {
     return std::string(sqlite3_libversion());
