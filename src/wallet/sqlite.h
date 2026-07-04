@@ -107,6 +107,8 @@ private:
 
     const std::string m_file_path;
 
+    const int m_additional_flags;
+
     /**
      * This mutex protects SQLite initialization and shutdown.
      * sqlite3_config() and sqlite3_shutdown() are not thread-safe (sqlite3_initialize() is).
