@@ -2383,7 +2383,7 @@ DBErrors CWallet::PopulateWalletFromDB(bilingual_str& error, std::vector<bilingu
         assert(m_internal_spk_managers.empty());
     }
 
-    const auto wallet_file = m_database->Filename();
+    const auto wallet_file = m_database->DisplayFileName();
     switch (nLoadWalletRet) {
     case DBErrors::LOAD_OK:
         break;
@@ -3102,7 +3102,7 @@ bool CWallet::LoadWalletArgs(std::shared_ptr<CWallet> wallet, const WalletContex
 std::shared_ptr<CWallet> CWallet::CreateNew(WalletContext& context, const std::string& name, std::unique_ptr<WalletDatabase> database, uint64_t wallet_creation_flags, bool born_encrypted, bilingual_str& error, std::vector<bilingual_str>& warnings)
 {
     interfaces::Chain* chain = context.chain;
-    const std::string& walletFile = database->Filename();
+    const std::string& walletFile = database->DisplayFileName();
 
     const auto start{SteadyClock::now()};
     // TODO: Can't use std::make_shared because we need a custom deleter but
@@ -3157,7 +3157,7 @@ std::shared_ptr<CWallet> CWallet::CreateNew(WalletContext& context, const std::s
 std::shared_ptr<CWallet> CWallet::LoadExisting(WalletContext& context, const std::string& name, std::unique_ptr<WalletDatabase> database, bilingual_str& error, std::vector<bilingual_str>& warnings)
 {
     interfaces::Chain* chain = context.chain;
-    const std::string& walletFile = database->Filename();
+    const std::string& walletFile = database->DisplayFileName();
 
     const auto start{SteadyClock::now()};
     std::shared_ptr<CWallet> walletInstance(new CWallet(chain, name, std::move(database)), FlushAndDeleteWallet);
