@@ -90,7 +90,7 @@ util::Result<std::string> ExportWatchOnlyWallet(const CWallet& wallet, const fs:
 
     // Always remove the temporary wallet files, even when returning early on error.
     std::shared_ptr<CWallet> watchonly_wallet;
-    fs::path wallet_path = fs::PathFromString(database->Filename()).parent_path();
+    fs::path wallet_path = fs::PathFromString(database->DisplayFileName()).parent_path();
     std::vector<fs::path> cleanup_files = database->Files();
     auto cleanup_watchonly_wallet = interfaces::MakeCleanupHandler([&watchonly_wallet, &wallet_path, &cleanup_files] {
         if (watchonly_wallet) watchonly_wallet.reset();

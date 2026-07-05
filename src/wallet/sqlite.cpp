@@ -52,7 +52,7 @@ static int TraceSqlCallback(unsigned code, void* context, void* param1, void* pa
         // in the log file, only expand statements that query the database, not
         // statements that update the database.
         char* expanded{sqlite3_stmt_readonly(stmt) ? sqlite3_expanded_sql(stmt) : nullptr};
-        LogTrace(BCLog::WALLETDB, "[%s] SQLite Statement: %s\n", db->Filename(), expanded ? expanded : sqlite3_sql(stmt));
+        LogTrace(BCLog::WALLETDB, "[%s] SQLite Statement: %s\n", db->DisplayFileName(), expanded ? expanded : sqlite3_sql(stmt));
         if (expanded) sqlite3_free(expanded);
     }
     return SQLITE_OK;
@@ -274,7 +274,7 @@ void SQLiteDatabase::Open(int additional_flags)
         if (util::log::ShouldTraceLog(BCLog::WALLETDB)) {
            ret = sqlite3_trace_v2(m_db, SQLITE_TRACE_STMT, TraceSqlCallback, this);
            if (ret != SQLITE_OK) {
-               LogWarning("Failed to enable SQL tracing for %s", Filename());
+               LogWarning("Failed to enable SQL tracing for %s", DisplayFileName());
            }
         }
     }

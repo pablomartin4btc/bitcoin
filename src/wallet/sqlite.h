@@ -150,7 +150,7 @@ public:
      */
     bool Backup(const std::string& dest) const override;
 
-    std::string Filename() override { return m_file_path; }
+    std::string DisplayFileName() override { return m_file_path; }
     /** Return paths to all database created files */
     std::vector<fs::path> Files() override
     {
