@@ -291,6 +291,74 @@ BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions_reorged_block, TestChain100
     BOOST_REQUIRE(DestroyBlockFilterIndex(BlockFilterType::BASIC));
 }
 
+BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions_pruned_reorged_block, TestChain100Setup)
+{
+    BOOST_REQUIRE(InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1_MiB, /*f_memory=*/true));
+    BlockFilterIndex& filter_index{*Assert(GetBlockFilterIndex(BlockFilterType::BASIC))};
+    BOOST_REQUIRE(filter_index.Init());
+    filter_index.Sync();
+
+    // Force the next block into a fresh file so it can be pruned independently
+    // of the rest of the chain.
+    CBlockIndex* pre_stale = WITH_LOCK(Assert(m_node.chainman)->GetMutex(), return m_node.chainman->ActiveChain().Tip());
+    WITH_LOCK(::cs_main, m_node.chainman->m_blockman.GetBlockFileInfo(pre_stale->GetBlockPos().nFile)->nSize = MAX_BLOCKFILE_SIZE);
+
+    // Mine the stale block paying coinbaseKey so a matching-filter wallet
+    // will need to fetch it during a scan.
+    CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
+    CBlockIndex* stale_block = WITH_LOCK(Assert(m_node.chainman)->GetMutex(), return m_node.chainman->ActiveChain().Tip());
+    const uint256 stale_hash{stale_block->GetBlockHash()};
+    const int stale_height{stale_block->nHeight};
+    BOOST_REQUIRE(filter_index.BlockUntilSyncedToCurrentChain());
+
+    // Reorg the stale block out.
+    BlockValidationState state;
+    BOOST_REQUIRE(m_node.chainman->ActiveChainstate().InvalidateBlock(state, stale_block));
+    const CScript replacement_script{GetScriptForRawPubKey(GenerateRandomKey().GetPubKey())};
+    CreateAndProcessBlock({}, replacement_script);
+    CreateAndProcessBlock({}, replacement_script);
+    BOOST_REQUIRE(filter_index.BlockUntilSyncedToCurrentChain());
+
+    // Verify the filter for the stale block is still available (the block
+    // filter index is not pruned along with block data).
+    {
+        BlockFilter filter;
+        BOOST_REQUIRE(filter_index.LookupFilter(stale_block, filter));
+    }
+
+    // Prune the stale block's file — the block is now not active AND unreadable.
+    int file_number;
+    {
+        LOCK(cs_main);
+        file_number = stale_block->GetBlockPos().nFile;
+        Assert(m_node.chainman)->m_blockman.PruneOneBlockFile(file_number);
+    }
+    m_node.chainman->m_blockman.UnlinkPrunedFiles({file_number});
+
+    // Wallet whose scripts match the stale block: the block filter says
+    // "fetch it", but the block is not on the active chain and cannot be
+    // read from disk. The scan must fail cleanly without processing any
+    // transactions from the stale block.
+    CWallet wallet(m_node.chain.get(), "", CreateMockableWalletDatabase());
+    {
+        LOCK(wallet.cs_wallet);
+        LOCK(Assert(m_node.chainman)->GetMutex());
+        wallet.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
+        wallet.SetLastBlockProcessed(m_node.chainman->ActiveChain().Height(), m_node.chainman->ActiveChain().Tip()->GetBlockHash());
+    }
+    AddKey(wallet, coinbaseKey);
+    WalletRescanReserver reserver(wallet);
+    reserver.reserve();
+    ScanResult result = wallet.Scanner().Scan(stale_hash, stale_height, /*max_height=*/{}, reserver, /*save_progress=*/false);
+    BOOST_CHECK_EQUAL(result.status, ScanResult::FAILURE);
+    BOOST_CHECK_EQUAL(result.last_failed_block, stale_hash);
+    BOOST_CHECK(result.last_scanned_block.IsNull());
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet.cs_wallet, return wallet.mapWallet.size()), 0U);
+
+    filter_index.Stop();
+    BOOST_REQUIRE(DestroyBlockFilterIndex(BlockFilterType::BASIC));
+}
+
 BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions_abort, TestChain100Setup)
 {
     CWallet wallet(m_node.chain.get(), "", CreateMockableWalletDatabase());
