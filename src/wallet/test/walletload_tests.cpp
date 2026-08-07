@@ -4,8 +4,10 @@
 
 #include <wallet/test/util.h>
 #include <wallet/wallet.h>
+#include <wallet/walletdb.h>
 #include <test/util/common.h>
 #include <test/util/logging.h>
+#include <test/util/random.h>
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
@@ -89,6 +91,31 @@ BOOST_FIXTURE_TEST_CASE(wallet_load_descriptors, TestingSetup)
         const std::shared_ptr<CWallet> wallet(new CWallet(m_node.chain.get(), "", std::move(database)));
         BOOST_CHECK_EQUAL(wallet->PopulateWalletFromDB(_error, _warnings), DBErrors::CORRUPT);
         BOOST_CHECK(found); // The error must be logged
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_load_corrupt_tx_hash, TestingSetup)
+{
+    // Write a tx record whose DB key (hash) does not match the hash of the
+    // serialised transaction. Loading must fail with CORRUPT rather than
+    // silently accepting broken data or scheduling a rescan.
+    auto database = CreateMockableWalletDatabase();
+    {
+        CMutableTransaction mtx;
+        mtx.vout.emplace_back(COIN, CScript() << OP_TRUE);
+        CWalletTx wtx{MakeTransactionRef(std::move(mtx)), TxStateInactive{}};
+        const Txid real_hash{wtx.GetHash()};
+        Txid wrong_key;
+        do { wrong_key = Txid::FromUint256(GetRandHash()); } while (wrong_key == real_hash);
+
+        auto batch = database->MakeBatch();
+        BOOST_CHECK(batch->Write(std::make_pair(DBKeys::TX, wrong_key), wtx));
+    }
+    {
+        const std::shared_ptr<CWallet> wallet(new CWallet(m_node.chain.get(), "", std::move(database)));
+        bilingual_str error;
+        std::vector<bilingual_str> warnings;
+        BOOST_CHECK_EQUAL(wallet->PopulateWalletFromDB(error, warnings), DBErrors::CORRUPT);
     }
 }
 
