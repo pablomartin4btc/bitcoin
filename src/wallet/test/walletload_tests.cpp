@@ -92,5 +92,55 @@ BOOST_FIXTURE_TEST_CASE(wallet_load_descriptors, TestingSetup)
     }
 }
 
+BOOST_FIXTURE_TEST_CASE(wallet_load_unordered_reorders_position_index, TestingSetup)
+{
+    // Simulate a legacy wallet where one tx record was never assigned an
+    // order position (nOrderPos == -1). Loading such a wallet triggers
+    // CWallet::ReorderTransactions(), which assigns it a position consistent
+    // with nTimeReceived. Verify that the fix is actually reflected when
+    // transactions are iterated in position order, not just that the
+    // nOrderPos field on the object itself ends up correct.
+    auto database = CreateMockableWalletDatabase();
+
+    auto make_wtx = [](CAmount vout_value, unsigned int time_received, int64_t order_pos) {
+        CMutableTransaction mtx;
+        mtx.vin.emplace_back();
+        mtx.vout.emplace_back(vout_value, CScript() << OP_TRUE);
+        CWalletTx wtx{MakeTransactionRef(std::move(mtx)), TxStateInactive{}};
+        wtx.nTimeReceived = time_received;
+        wtx.nOrderPos = order_pos;
+        return wtx;
+    };
+
+    CWalletTx wtx_a{make_wtx(1 * COIN, 100, 0)};
+    CWalletTx wtx_b{make_wtx(2 * COIN, 200, 1)};
+    // wtx_c is the chronologically newest transaction, but simulates a
+    // legacy record that never had an order position assigned.
+    CWalletTx wtx_c{make_wtx(3 * COIN, 300, -1)};
+
+    {
+        auto batch = database->MakeBatch();
+        BOOST_CHECK(batch->Write(std::make_pair(DBKeys::TX, wtx_a.GetHash()), wtx_a));
+        BOOST_CHECK(batch->Write(std::make_pair(DBKeys::TX, wtx_b.GetHash()), wtx_b));
+        BOOST_CHECK(batch->Write(std::make_pair(DBKeys::TX, wtx_c.GetHash()), wtx_c));
+    }
+
+    const std::shared_ptr<CWallet> wallet(new CWallet(m_node.chain.get(), "", std::move(database)));
+    bilingual_str error;
+    std::vector<bilingual_str> warnings;
+    BOOST_CHECK_EQUAL(wallet->PopulateWalletFromDB(error, warnings), DBErrors::LOAD_OK);
+
+    LOCK(wallet->cs_wallet);
+    // wtx_c is the newest transaction by nTimeReceived, so after
+    // ReorderTransactions() runs it must be the *last* entry when
+    // transactions are iterated in position order.
+    std::vector<Txid> order;
+    for (const auto& wtx : wallet->m_txs_by_pos) {
+        order.push_back(wtx.GetHash());
+    }
+    BOOST_REQUIRE_EQUAL(order.size(), 3);
+    BOOST_CHECK_EQUAL(order.back(), wtx_c.GetHash());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 } // namespace wallet
