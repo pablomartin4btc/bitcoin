@@ -37,7 +37,8 @@ void AutoFile::seek(int64_t offset, int origin)
         throw std::ios_base::failure("AutoFile::seek: file handle is nullptr");
     }
     if (std::fseek(m_file, offset, origin) != 0) {
-        throw std::ios_base::failure(feof() ? "AutoFile::seek: end of file" : "AutoFile::seek: fseek failed");
+        const int err{errno};
+        throw std::ios_base::failure(feof() ? "AutoFile::seek: end of file" : "AutoFile::seek: fseek failed: " + SysErrorString(err));
     }
     if (origin == SEEK_SET) {
         m_position = offset;
