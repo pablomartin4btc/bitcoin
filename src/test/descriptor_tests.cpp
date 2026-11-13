@@ -1609,6 +1609,28 @@ BOOST_AUTO_TEST_CASE(parse_pubkey_invalid_expressions)
     BOOST_CHECK_EQUAL(error, "Unexpected characters after musig() expression");
 }
 
+BOOST_AUTO_TEST_CASE(parse_pubkey_hardened_after_xpub)
+{
+    const std::string xpub{"xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL"};
+    const FlatSigningProvider no_keys;
+
+    // A hardened step after an xpub parses, but nothing can be derived
+    // without the private key. Callers must check CanSelfExpand().
+    FlatSigningProvider keys, out;
+    std::string error;
+    auto providers{ParsePubkey(xpub + "/0h/*", keys, error)};
+    BOOST_REQUIRE_MESSAGE(providers.size() == 1, error);
+    BOOST_CHECK(providers.front()->IsRange());
+    BOOST_CHECK(!providers.front()->CanSelfExpand());
+    BOOST_CHECK(!providers.front()->GetPubKey(0, no_keys, out).has_value());
+
+    // Unhardened steps can be derived from the xpub alone.
+    providers = ParsePubkey(xpub + "/0/*", keys, error);
+    BOOST_REQUIRE_MESSAGE(providers.size() == 1, error);
+    BOOST_CHECK(providers.front()->CanSelfExpand());
+    BOOST_CHECK(providers.front()->GetPubKey(0, no_keys, out).has_value());
+}
+
 BOOST_AUTO_TEST_CASE(descriptor_literal_null_byte)
 {
     // Trailing '\0' string literal should be ignored.
