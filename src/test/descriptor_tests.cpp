@@ -1587,6 +1587,28 @@ BOOST_AUTO_TEST_CASE(parse_pubkey_origin_info)
     BOOST_CHECK(!providers.front()->GetOriginInfo().has_value());
 }
 
+BOOST_AUTO_TEST_CASE(parse_pubkey_invalid_expressions)
+{
+    const std::string xpub{"xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL"};
+    const std::string xpub2{"xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y"};
+    const std::string musig_typo{"musig(" + xpub + "," + xpub2 + ")0/*"};
+
+    // Inputs a pasted key expression could contain. The wording of messages
+    // that quote the input is not checked here.
+    for (const std::string& expr : {std::string{}, " " + xpub, "pkh(" + xpub + ")", musig_typo}) {
+        FlatSigningProvider keys;
+        std::string error;
+        BOOST_CHECK(ParsePubkey(expr, keys, error).empty());
+        BOOST_CHECK(!error.empty());
+        BOOST_CHECK(keys.keys.empty());
+    }
+
+    FlatSigningProvider keys;
+    std::string error;
+    BOOST_CHECK(ParsePubkey(musig_typo, keys, error).empty());
+    BOOST_CHECK_EQUAL(error, "Unexpected characters after musig() expression");
+}
+
 BOOST_AUTO_TEST_CASE(descriptor_literal_null_byte)
 {
     // Trailing '\0' string literal should be ignored.
