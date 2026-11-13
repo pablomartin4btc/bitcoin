@@ -1551,6 +1551,42 @@ BOOST_AUTO_TEST_CASE(parse_pubkey_invalid_keys)
     }
 }
 
+BOOST_AUTO_TEST_CASE(parse_pubkey_origin_info)
+{
+    const std::string xpub{"xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL"};
+    const std::string xpub2{"xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y"};
+    FlatSigningProvider keys;
+    std::string error;
+
+    // Multipath: every expansion carries the same explicit origin.
+    auto providers{ParsePubkey("[aabbccdd/87h/1h/0h]" + xpub + "/<0;1>/*", keys, error)};
+    BOOST_REQUIRE_MESSAGE(providers.size() == 2, error);
+    for (const auto& provider : providers) {
+        const auto origin_info{provider->GetOriginInfo()};
+        BOOST_REQUIRE(origin_info.has_value());
+        BOOST_CHECK_EQUAL(HexStr(origin_info->fingerprint), "aabbccdd");
+        BOOST_CHECK(origin_info->path == std::vector<uint32_t>({0x80000057U, 0x80000001U, 0x80000000U}));
+    }
+
+    // Fingerprint without a path.
+    providers = ParsePubkey("[aabbccdd]" + xpub, keys, error);
+    BOOST_REQUIRE_MESSAGE(providers.size() == 1, error);
+    BOOST_REQUIRE(providers.front()->GetOriginInfo().has_value());
+    BOOST_CHECK(providers.front()->GetOriginInfo()->path.empty());
+
+    // Origin on a constant key.
+    providers = ParsePubkey("[deadbeef/0h]03a34b99f22c790c4e36b2b3c2c35a36db06226e41c692fc82b8b56ac1c540c5bd", keys, error);
+    BOOST_REQUIRE_MESSAGE(providers.size() == 1, error);
+    BOOST_REQUIRE(providers.front()->GetOriginInfo().has_value());
+    BOOST_CHECK_EQUAL(HexStr(providers.front()->GetOriginInfo()->fingerprint), "deadbeef");
+
+    // musig() has no origin of its own, even when its participants have one.
+    providers = ParsePubkey("musig([aabbccdd/87h]" + xpub + "," + xpub2 + ")/0/*", keys, error);
+    BOOST_REQUIRE_MESSAGE(providers.size() == 1, error);
+    BOOST_CHECK(providers.front()->IsRange());
+    BOOST_CHECK(!providers.front()->GetOriginInfo().has_value());
+}
+
 BOOST_AUTO_TEST_CASE(descriptor_literal_null_byte)
 {
     // Trailing '\0' string literal should be ignored.
